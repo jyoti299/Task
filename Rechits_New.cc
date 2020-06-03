@@ -52,7 +52,8 @@
 #include "Geometry/CaloTopology/interface/CaloTowerConstituentsMap.h"
 #include "DataFormats/CaloTowers/interface/CaloTowerDetId.h"
 #include "RecoEgamma/EgammaIsolationAlgos/interface/EGHcalRecHitSelector.h"
-
+#include "DataFormats/Math/interface/deltaPhi.h"
+//#include "Code/HoEAnalyzer/plugins/HcalHaloAlgo.cc"
 //
 // class declaration
 //
@@ -61,11 +62,11 @@
 // the template argument to the base class so the class inherits
 // from  edm::one::EDAnalyzer<>
 // This will improve performance in multithreaded jobs.
-//class FlatPhoHoEAnalyzer : public edm::one::EDAnalyzer<>  {
-class FlatPhoHoEAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
+//class TrywithSam : public edm::one::EDAnalyzer<>  {
+class Rechits_New : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
 public:
-  explicit FlatPhoHoEAnalyzer(const edm::ParameterSet&);
-  ~FlatPhoHoEAnalyzer();
+  explicit Rechits_New(const edm::ParameterSet&);
+  ~Rechits_New();
   
   static edm::ParameterSetDescription makePSetDescription();
   
@@ -84,7 +85,8 @@ public:
   std::vector<int>    pho_gap_eb_phi;
   std::vector<int>    pho_gap_ee_dee;
   std::vector<int>    pho_gap_ee_ring;
-
+  std::vector<float>  diffFromPhi;
+  std::vector<float>  rechit_Noise;
   std::vector<int>    pho_golden;
   std::vector<int>    pho_unknown;
   std::vector<int>    pho_bigbrem;
@@ -94,6 +96,7 @@ public:
 
   std::vector<float>  pho_track_fbrem;
   std::vector<float>  pho_sc_fbrem;
+  std::vector<float>  pho_gen_ecal;
   std::vector<int>    pho_nbrem;
   std::vector<int>    pho_genmatch;
   std::vector<float>  pho_sc_energy;
@@ -149,6 +152,27 @@ public:
   std::vector<float>  hcalhit_eta;
   std::vector<float>  hcalhit_phi;
 
+  std::vector<std::vector<int>>    hcalRechitIeta;
+  std::vector<std::vector<int>>    hcalRechitIphi;
+  std::vector<std::vector<float>>  hcalRechitEnergy;
+  std::vector<std::vector<int>>    hcalRechitAbsDIetaFromPhoSeed;
+  std::vector<std::vector<int>>    hcalRechitAbsDIphiFromPhoSeed;
+  std::vector<std::vector<int>>    hcalRechitRawID;
+  std::vector<std::vector<int>>    hcalRechitDepth; // mostly for Run 3 //
+  std::vector<std::vector<float>>  hcalRechitNoise; 
+  std::vector<std::vector<float>>    hcalRechitEta;
+  std::vector<std::vector<float>>    hcalRechitPhi;
+  std::vector<std::vector<float>>    hcal_diffFromPhi;
+  std::vector<int>    perPho_hcalRechitIeta;
+  std::vector<int>    perPho_hcalRechitIphi;
+  std::vector<float>  perPho_hcalRechitEnergy;
+  std::vector<int>    perPho_hcalRechitAbsDIetaFromPhoSeed;
+  std::vector<int>    perPho_hcalRechitAbsDIphiFromPhoSeed;
+  std::vector<int>    perPho_hcalRechitRawID;
+  std::vector<int>    perPho_hcalRechitDepth; // mostly for Run 3 //
+  std::vector<float>  perPho_hcalRechitEta;
+  std::vector<float>  perPho_hcalRechitPhi;
+  
   int imin, min_dieta, min_diphi;
   float min_diR2;
 
@@ -182,6 +206,7 @@ private:
   edm::EDGetTokenT<edm::ValueMap<float> > phoPhoIsoToken_;
   edm::EDGetTokenT<edm::ValueMap<float> > phoNeuIsoToken_;
   edm::EDGetTokenT<edm::ValueMap<float> > phoChaIsoToken_; // added
+  edm::Handle<std::vector<pat::PackedCandidate> > pfCands;
   std::string output;
   bool Run2_2018 ; // Now two options are supported, Run2_2018 and Run3
 };
@@ -197,7 +222,7 @@ private:
 //
 // constructors and destructor
 //
-FlatPhoHoEAnalyzer::FlatPhoHoEAnalyzer(const edm::ParameterSet& iConfig) :
+Rechits_New::Rechits_New(const edm::ParameterSet& iConfig) :
   phoToken_(consumes<edm::View<reco::Photon> >(iConfig.getParameter<edm::InputTag>("photons"))), //added
   puCollection_(consumes<std::vector<PileupSummaryInfo> >(iConfig.getParameter<edm::InputTag>("pileupCollection"))),
   rhoToken_(consumes<double>(iConfig.getParameter<edm::InputTag>("rhoSrc"))),
@@ -216,7 +241,7 @@ FlatPhoHoEAnalyzer::FlatPhoHoEAnalyzer(const edm::ParameterSet& iConfig) :
 }
 
 
-FlatPhoHoEAnalyzer::~FlatPhoHoEAnalyzer()
+Rechits_New::~Rechits_New()
 {
   
   // do anything here that needs to be done at desctruction time
@@ -231,10 +256,10 @@ FlatPhoHoEAnalyzer::~FlatPhoHoEAnalyzer()
 
 // ------------ method called for each event  ------------
 void
-FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
+Rechits_New::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
   using namespace edm;
-//  using mynamespace::FlatPhoHoEAnalyzer;
+//  using mynamespace::Rechits_New;
   n_pho = 0;
   pho_eb.clear();
   pho_ee.clear();
@@ -243,7 +268,8 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   pho_gap_eb_phi.clear();
   pho_gap_ee_dee.clear();
   pho_gap_ee_ring.clear();
-
+  diffFromPhi.clear();
+ // rechit_Noise.clear();
   pho_golden.clear();
   pho_unknown.clear();
   pho_badtrack.clear();
@@ -254,7 +280,7 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   pho_track_fbrem.clear();
   pho_sc_fbrem.clear();
   pho_nbrem.clear();
-
+  pho_gen_ecal.clear();
   pho_genmatch.clear();
   pho_pt_ratio_reco_gen.clear();
   pho_dR_reco_gen.clear();
@@ -309,6 +335,17 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   hcalhit_eta.clear();
   hcalhit_phi.clear();
 
+  hcalRechitIeta.clear();
+  hcalRechitIphi.clear();
+  hcalRechitEnergy.clear();
+  hcalRechitAbsDIetaFromPhoSeed.clear();
+  hcalRechitAbsDIphiFromPhoSeed.clear();
+  hcalRechitRawID.clear();
+  hcalRechitDepth.clear();
+  hcalRechitNoise.clear(); 
+  hcalRechitEta.clear();
+  hcalRechitPhi.clear();
+  hcal_diffFromPhi.clear();
   pu_true = -999999.f;
   pu_obs = -999999;
   rho = -999999.f;
@@ -319,7 +356,26 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   bunch_crossing = iEvent.eventAuxiliary().bunchCrossing();
   orbit_number = iEvent.eventAuxiliary().orbitNumber();
   store_number = iEvent.eventAuxiliary().storeNumber();
-
+// adding from SAM
+/*  std::vector<std::pair<float,float> > eleEtaPhi;
+  eleEtaPhi.push_back(std::make_pair(ele->detEta(),ele->detPhi()));
+  std::vector<const pat::Electron*> patEles;
+  for(const auto& ele : *eleHandle){
+    patEles.push_back(dynamic_cast<const pat::Electron*>(&ele));
+  }
+  for(size_t candNr=0;candNr<pfCands->size();candNr++){
+    const pat::PackedCandidateRef pfCandRef(pfCands,candNr);
+    const pat::PackedCandidate& pfCand = *pfCandRef;
+    int scSeedCrysId=getSeedCrysIdOfPFCandSC(pfCandRef,patEles);
+    bool accept =false;
+    for(size_t eleNr=0;eleNr<eleEtaPhi.size();eleNr++){
+      if(MathFuncs::calDeltaR2(eleEtaPhi[eleNr].first,eleEtaPhi[eleNr].second,
+                               pfCand.eta(),pfCand.phi())<maxDR2){
+        accept=true;
+        break;
+      }
+    }
+}*/
   edm::Handle<std::vector<PileupSummaryInfo> > genPileupHandle;
   iEvent.getByToken(puCollection_, genPileupHandle);
   
@@ -356,6 +412,7 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   iEvent.getByToken(phoNeuIsoToken_, phoNeuIsoHandle);
   iEvent.getByToken(phoChaIsoToken_, phoChaIsoHandle);
 
+
 //  if (iEvent.get(phoToken_).size() > pho_golden.capacity())
  //   reallocate_setaddress(iEvent.get(phoToken_).size(), 0);
 
@@ -374,6 +431,9 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 	if ( (p->status() == 1) and (std::abs(p->pdgId()) == 22) ) {
 	  //std::cout << "checking if the reco ele match with this one" << std::endl;
 	  double this_dr2 = reco::deltaR2(pho,*p);
+          double ecal_gen = p->energy();
+          pho_gen_ecal.push_back(ecal_gen);
+         // std::cout<<" Gen level ECAL "<<ecal_gen<<" Photon Pt "<<p->pt()<<std::endl;
 	  //std::cout << "this_dr " << this_dr << std::endl;
 	  if (this_dr2 < min_dr2) {
 	    min_dr2 = this_dr2;
@@ -386,6 +446,18 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     // these cuts were decided looking at min_dr and ptR distributions.
     if ( (min_dr2 < 0.0016) and (ptR > 0.7) && (ptR < 1.3) ) 
       genmatch = 1;
+
+    perPho_hcalRechitIeta.clear();
+    perPho_hcalRechitIphi.clear();
+    perPho_hcalRechitEnergy.clear();
+    perPho_hcalRechitAbsDIetaFromPhoSeed.clear();
+    perPho_hcalRechitAbsDIphiFromPhoSeed.clear();
+    perPho_hcalRechitRawID.clear();
+    perPho_hcalRechitDepth.clear();
+    perPho_hcalRechitEta.clear();
+    perPho_hcalRechitPhi.clear();
+    rechit_Noise.clear();
+
     pho_dR_reco_gen.emplace_back( std::sqrt(min_dr2) );
     pho_pt_ratio_reco_gen.emplace_back(ptR);
     pho_genmatch.emplace_back(genmatch);
@@ -474,9 +546,105 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
       CaloTowerDetId towerId(towerMap_->towerOf(seedId));       
       var_pho_seed_hcal_ieta = towerId.ieta();
       var_pho_seed_hcal_iphi = towerId.iphi();
+      bool hitsplushalfpi = true;
+   /*   float maxDR2=0.4*0.4;
+      std::vector<std::pair<float,float> > etaPhis;
+       if ( hitsplushalfpi )  etaPhis.push_back({pho_sc_eta[n_pho],pho_sc_phi[n_pho]+3.14159/2.});
+    auto deltaR2Match = [&etaPhis,&maxDR2](const GlobalPoint& pos){
+    float eta = pos.eta();
+    float phi = pos.phi();
+    for(auto& etaPhi : etaPhis){
+      if(reco::deltaR2(eta,phi,etaPhi.first,etaPhi.second)<maxDR2) return true;
     }
-/*  
-    pho_track_fbrem.emplace_back(pho.trackFbrem());
+    return false;
+  };*/
+/*
+         for(auto& hit : iEvent.get(hbhe_rechits_)){
+             std::cout<<" In loop "<<std::endl;
+        if ( (hit.id().rawId() != 0 ) ) {
+            if (theCaloGeometry.product() != nullptr) {
+          const CaloSubdetectorGeometry* subDetGeom =  theCaloGeometry->getSubdetectorGeometry(hit.id());
+               if(subDetGeom->getGeometry(hit.id()) !=nullptr){
+                    // auto cellGeom = subDetGeom->getGeometry(hit.id());
+                          if(deltaR2Match(theCaloGeometry.product()->getPosition(hit.id()))) {std::cout<<" Done here "<<std::endl;
+                               rechit_Noise.emplace_back(hit.energy());
+                                   } }// this rechits 
+                                                }}}
+*/
+      for (auto& hcalrh : iEvent.get(hbhe_rechits_) ) {
+        int dIEtaAbs = std::abs(calDIEta(var_pho_seed_hcal_ieta, hcalrh.id().ieta()));
+        int dIPhiAbs = std::abs(calDIPhi(var_pho_seed_hcal_iphi, hcalrh.id().iphi()));
+          float rechitPhi_new=-99;
+      //    float diffFromSCPhi=-99;
+          if ( (hcalrh.id().rawId() != 0 ) ) {
+            if (theCaloGeometry.product() != nullptr) {
+              const CaloSubdetectorGeometry *geo = theCaloGeometry->getSubdetectorGeometry(hcalrh.id());
+              if(geo->getGeometry(hcalrh.id()) !=nullptr){
+                const GlobalPoint & rechitPoint = theCaloGeometry.product()->getPosition(hcalrh.id());
+                rechitPhi_new=rechitPoint.phi();  } } }
+//                diffFromSCPhi = deltaPhi(pho_sc_phi[n_pho],rechitPhi_new);
+//                diffFromPhi.push_back(diffFromSCPhi); } } }
+   //               if( 1.25663 <= fabs(diffFromSCPhi) <= 1.8849)
+     //                  {
+   //    std::cout <<" DeltaPhi "<<fabs(deltaPhi(pho_sc_phi[n_pho],rechitPhi_new))<<" Diffr From SC Phi vector "<<diffFromPhi[n_pho]<<std::endl;
+                        // rechit_Noise.emplace_back(hcalrh.energy()); 
+                 //if ( hitsplushalfpi )  etaPhis.push_back({rechitPoint.eta(),rechitPoint.phi()+3.14159/2.});
+                 
+/*  if ( hitsplushalfpi )  etaPhis.push_back({pho_sc_eta[n_pho],pho_sc_phi[n_pho]+3.14159/2.});               
+  auto deltaR2Match = [&etaPhis,&maxDR2](const GlobalPoint& pos){
+    float eta = pos.eta();
+    float phi = pos.phi();
+    for(auto& etaPhi : etaPhis){
+      if(reco::deltaR2(eta,phi,etaPhi.first,etaPhi.second)<maxDR2) return true;
+    }
+    return false;
+  };*/
+              /*  for(auto& hit : iEvent.get(hbhe_rechits_)){
+    std::cout<<" In loop "<<std::endl;
+    const CaloSubdetectorGeometry* subDetGeom =  theCaloGeometry->getSubdetectorGeometry(hit.id());
+    if(subDetGeom){
+      auto cellGeom = subDetGeom->getGeometry(hit.id());
+      if(deltaR2Match(cellGeom->getPosition())) {std::cout<<" Done here "<<std::endl;
+    rechit_Noise.emplace_back(hcalrh.energy());
+   } } // this rechits 
+              }*/
+           // }
+         // }
+        if ( (dIEtaAbs <= maxDIEta_) && (dIPhiAbs <= maxDIPhi_) &&  (hcalrh.energy()>getMinEnergyHCAL(hcalrh.id()) ) ) {
+          perPho_hcalRechitIeta.push_back(hcalrh.id().ieta());
+          perPho_hcalRechitIphi.push_back(hcalrh.id().iphi());
+          perPho_hcalRechitEnergy.push_back(hcalrh.energy());
+          perPho_hcalRechitAbsDIetaFromPhoSeed.push_back(dIEtaAbs);
+          perPho_hcalRechitAbsDIphiFromPhoSeed.push_back(dIPhiAbs);
+
+          perPho_hcalRechitRawID.push_back(hcalrh.id().rawId());
+          perPho_hcalRechitDepth.push_back(hcalrh.id().depth());
+
+          float rechitEta=-99;
+          float rechitPhi=-99;
+          float diffFromSCPhi=-99;
+          if ( (hcalrh.id().rawId() != 0 ) ) {
+            if (theCaloGeometry.product() != nullptr) {
+              const CaloSubdetectorGeometry *geo = theCaloGeometry->getSubdetectorGeometry(hcalrh.id());
+              if(geo->getGeometry(hcalrh.id()) !=nullptr){
+                const GlobalPoint & rechitPoint = theCaloGeometry.product()->getPosition(hcalrh.id());
+
+                rechitEta=rechitPoint.eta();
+                rechitPhi=rechitPoint.phi();
+                diffFromSCPhi = deltaPhi(rechitPhi,rechitPhi_new);
+        if( 1.25663 <= fabs(diffFromSCPhi) <= 1.8849)
+                  {     rechit_Noise.emplace_back(hcalrh.energy()); }
+              }
+            }
+          }
+          perPho_hcalRechitEta.push_back(rechitEta);
+          perPho_hcalRechitPhi.push_back(rechitPhi);
+        }
+      }
+    } 
+
+
+/*    pho_track_fbrem.emplace_back(pho.trackFbrem());
     pho_sc_fbrem.emplace_back(pho.superClusterFbrem());
     pho_nbrem.emplace_back(pho.numberOfBrems());
 
@@ -513,6 +681,7 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     pho_bigbrem.emplace_back(var_bigbrem);
 */
     pho_sc_energy.emplace_back(superClus.energy());
+    // std::cout<<" Super Cluster "<<superClus.energy()<<std::endl;
     pho_sc_raw_energy.emplace_back(superClus.rawEnergy());
     pho_seed_energy.emplace_back(seedCluster.energy());
     pho_seed_corr_energy.emplace_back(seedCluster.correctedEnergy());
@@ -535,8 +704,21 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     pho_gap_eb_phi.emplace_back(pho.isEBPhiGap());
     pho_gap_ee_dee.emplace_back(pho.isEEDeeGap());
     pho_gap_ee_ring.emplace_back(pho.isEERingGap());
-
+    //diffFromPhi.emplace_back(diffFromSCPhi);
+    //// Added by me by making this a vector of vectors 
+    hcalRechitIeta.push_back(perPho_hcalRechitIeta);
+    hcalRechitIphi.push_back(perPho_hcalRechitIphi);
+    hcalRechitEnergy.push_back(perPho_hcalRechitEnergy);
+    hcalRechitAbsDIetaFromPhoSeed.push_back(perPho_hcalRechitAbsDIetaFromPhoSeed);
+    hcalRechitAbsDIphiFromPhoSeed.push_back(perPho_hcalRechitAbsDIphiFromPhoSeed);
+    hcalRechitRawID.push_back(perPho_hcalRechitRawID);
+    hcalRechitDepth.push_back(perPho_hcalRechitDepth);
+    hcalRechitNoise.push_back(rechit_Noise);
+    hcalRechitEta.push_back(perPho_hcalRechitEta);
+    hcalRechitPhi.push_back(perPho_hcalRechitPhi);
+    hcal_diffFromPhi.push_back(diffFromPhi);
     ++n_pho;
+    //std::cout<<" No of photons after adding"<<n_pho<<std::endl;
   }
 
   // given the context, should be ok...
@@ -606,9 +788,10 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   assert(((void) "ERROR: pho_seed_hcal_ieta size doesn't match n_pho!!!", int(pho_seed_hcal_ieta.size()) == n_pho));
   assert(((void) "ERROR: pho_seed_hcal_iphi size doesn't match n_pho!!!", int(pho_seed_hcal_iphi.size()) == n_pho));
 */
-  if (iEvent.get(hbhe_rechits_).size() > hcalhit_depth.capacity())
-      reallocate_setaddress(0, iEvent.get(hbhe_rechits_).size());
-
+  if (iEvent.get(hbhe_rechits_).size() > hcalhit_depth.capacity())  
+   reallocate_setaddress(0, iEvent.get(hbhe_rechits_).size());
+   
+ // std::cout<<" HCAL Depth Capacity "<<hcalhit_depth.capacity()<<std::endl;
   for (auto& hcalrh : iEvent.get(hbhe_rechits_)) {
     if (hcalrh.energy() < getMinEnergyHCAL(hcalrh.id()))
       continue;
@@ -664,7 +847,7 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   }
 
   // again, just in case
-/*  assert(((void) "ERROR: hcalhit_ieta size doesn't match n_hcalhit!!!", int(hcalhit_ieta.size()) == n_hcalhit));
+  assert(((void) "ERROR: hcalhit_ieta size doesn't match n_hcalhit!!!", int(hcalhit_ieta.size()) == n_hcalhit));
   assert(((void) "ERROR: hcalhit_iphi size doesn't match n_hcalhit!!!", int(hcalhit_iphi.size()) == n_hcalhit));
   assert(((void) "ERROR: hcalhit_energy size doesn't match n_hcalhit!!!", int(hcalhit_energy.size()) == n_hcalhit));
   assert(((void) "ERROR: hcalhit_seed_dieta size doesn't match n_hcalhit!!!", int(hcalhit_seed_dieta.size()) == n_hcalhit));
@@ -674,7 +857,7 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   assert(((void) "ERROR: hcalhit_pho_index size doesn't match n_hcalhit!!!", int(hcalhit_pho_index.size()) == n_hcalhit));
   assert(((void) "ERROR: hcalhit_eta size doesn't match n_hcalhit!!!", int(hcalhit_eta.size()) == n_hcalhit));
   assert(((void) "ERROR: hcalhit_phi size doesn't match n_hcalhit!!!", int(hcalhit_phi.size()) == n_hcalhit));
-*/
+
   tree->Fill();
 
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
@@ -684,7 +867,7 @@ FlatPhoHoEAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 }
 
 // doing some blatant copy paste from RecoEgamma/EgammaIsolationAlgos/src/EGHcalRecHitSphoctor.cc
-int FlatPhoHoEAnalyzer::calDIPhi(int iPhi1, int iPhi2) {
+int Rechits_New::calDIPhi(int iPhi1, int iPhi2) {
   int dPhi = iPhi1 - iPhi2;
   if (dPhi > 72 / 2)
     dPhi -= 72;
@@ -693,7 +876,7 @@ int FlatPhoHoEAnalyzer::calDIPhi(int iPhi1, int iPhi2) {
   return dPhi;
 }
 
-int FlatPhoHoEAnalyzer::calDIEta(int iEta1, int iEta2) {
+int Rechits_New::calDIEta(int iEta1, int iEta2) {
   int dEta = iEta1 - iEta2;
   if (iEta1 * iEta2 < 0) {  //-ve to +ve transition and no crystal at zero
     if (dEta < 0)
@@ -710,7 +893,7 @@ int FlatPhoHoEAnalyzer::calDIEta(int iEta1, int iEta2) {
 // for 2018, HB threshold is 0.7, and for Run 3 it becomes 0.1 in depth1, 0.2 in depth2, 0.3 in other depths.
 // In HE, 2018 and Run3 is same, and it is 0.1 in depth1, and 0.2 in other depths.
 // Double check these HCAL thresholds from Sam.
-float FlatPhoHoEAnalyzer::getMinEnergyHCAL(HcalDetId id) const {
+float Rechits_New::getMinEnergyHCAL(HcalDetId id) const {
   if ( (id.subdetId() == HcalBarrel)  ) {
     if ( (Run2_2018 == 1) )
       return 0.7f;
@@ -734,7 +917,7 @@ float FlatPhoHoEAnalyzer::getMinEnergyHCAL(HcalDetId id) const {
     return 999999.f;
 }
 
-void FlatPhoHoEAnalyzer::reallocate_setaddress(int n_pho_, int n_hcalhit_)
+void Rechits_New::reallocate_setaddress(int n_pho_, int n_hcalhit_)
 {
   static int cap_pho = 8;
   cap_pho = (n_pho_ == 0) ? cap_pho : n_pho_;
@@ -800,7 +983,7 @@ void FlatPhoHoEAnalyzer::reallocate_setaddress(int n_pho_, int n_hcalhit_)
   pho_seed_hcal_ieta.reserve(cap_pho);
   pho_seed_hcal_iphi.reserve(cap_pho);
 
-  static int cap_hcalhit = 128;
+  static int cap_hcalhit = 500;
   cap_hcalhit = (n_hcalhit_ == 0) ? cap_hcalhit : n_hcalhit_;
   hcalhit_ieta.reserve(cap_hcalhit);
   hcalhit_iphi.reserve(cap_hcalhit);
@@ -845,6 +1028,7 @@ void FlatPhoHoEAnalyzer::reallocate_setaddress(int n_pho_, int n_hcalhit_)
 
   TBranch *b_pho_track_fbrem = tree->Branch("pho_track_fbrem", &pho_track_fbrem);
   TBranch *b_pho_sc_fbrem = tree->Branch("pho_sc_fbrem", &pho_sc_fbrem);
+  TBranch *b_pho_gen_ecal = tree->Branch("pho_gen_ecal",&pho_gen_ecal);
   TBranch *b_pho_nbrem = tree->Branch("pho_nbrem", &pho_nbrem);
   TBranch *b_pho_genmatch = tree->Branch("pho_genmatch", &pho_genmatch);
   TBranch *b_pho_dR_reco_gen = tree->Branch("pho_dR_reco_gen", &pho_dR_reco_gen);
@@ -899,6 +1083,19 @@ void FlatPhoHoEAnalyzer::reallocate_setaddress(int n_pho_, int n_hcalhit_)
   TBranch *b_hcalhit_eta = tree->Branch("hcalhit_eta", &hcalhit_eta);
   TBranch *b_hcalhit_phi = tree->Branch("hcalhit_phi", &hcalhit_phi);
 
+  TBranch *b_hcalRechitIeta = tree->Branch("hcalRechitIeta", &hcalRechitIeta);
+  TBranch *b_hcalRechitIphi = tree->Branch("hcalRechitIphi", &hcalRechitIphi);
+  TBranch *b_hcalRechitEnergy = tree->Branch("hcalRechitEnergy", &hcalRechitEnergy);
+  TBranch *b_hcalRechitAbsDIetaFromPhoSeed = tree->Branch("hcalRechitAbsDIetaFromPhoSeed", &hcalRechitAbsDIetaFromPhoSeed);
+  TBranch *b_hcalRechitAbsDIphiFromPhoSeed = tree->Branch("hcalRechitAbsDIphiFromPhoSeed", &hcalRechitAbsDIphiFromPhoSeed);
+  TBranch *b_hcalRechitRawID = tree->Branch("hcalRechitRawID", &hcalRechitRawID);
+  TBranch *b_hcalRechitDepth = tree->Branch("hcalRechitDepth", &hcalRechitDepth);
+  TBranch *b_hcalRechitNoise = tree->Branch("hcalRechitNoise", &hcalRechitNoise);
+  TBranch *b_hcalRechitEta = tree->Branch("hcalRechitEta", &hcalRechitEta);
+  TBranch *b_diffFromPhi  = tree->Branch("diffFromPhi", &diffFromPhi);
+  TBranch *b_rechit_Noise  = tree->Branch("rechit_Noise", &rechit_Noise);
+  TBranch *b_hcalRechitPhi = tree->Branch("hcalRechitPhi", &hcalRechitPhi);
+  TBranch *b_hcal_diffFromPhi = tree->Branch("hcal_diffFromPhi",&hcal_diffFromPhi);
   if (n_pho_ != 0) {
     std::cout << "Electron block realloc to " << pho_golden.capacity() << "..." << std::endl;
 
@@ -916,7 +1113,7 @@ void FlatPhoHoEAnalyzer::reallocate_setaddress(int n_pho_, int n_hcalhit_)
     b_pho_gap->SetAddress(pho_gap.data());
     b_pho_badtrack->SetAddress(pho_badtrack.data());
     b_pho_showering->SetAddress(pho_showering.data());
-
+    b_pho_gen_ecal->SetAddress(pho_gen_ecal.data());
     b_pho_track_fbrem->SetAddress(pho_track_fbrem.data());
     b_pho_sc_fbrem->SetAddress(pho_sc_fbrem.data());
     b_pho_nbrem->SetAddress(pho_nbrem.data());
@@ -976,16 +1173,30 @@ void FlatPhoHoEAnalyzer::reallocate_setaddress(int n_pho_, int n_hcalhit_)
     b_hcalhit_pho_index->SetAddress(hcalhit_pho_index.data());
     b_hcalhit_eta->SetAddress(hcalhit_eta.data());
     b_hcalhit_phi->SetAddress(hcalhit_phi.data());
+
+    b_hcalRechitIeta->SetAddress(hcalRechitIeta.data());
+    b_hcalRechitIphi->SetAddress(hcalRechitIphi.data());
+    b_hcalRechitEnergy->SetAddress(hcalRechitEnergy.data());
+    b_hcalRechitAbsDIetaFromPhoSeed->SetAddress(hcalRechitAbsDIetaFromPhoSeed.data());
+    b_hcalRechitAbsDIphiFromPhoSeed->SetAddress(hcalRechitAbsDIphiFromPhoSeed.data());
+    b_hcalRechitEta->SetAddress(hcalRechitEta.data());
+    b_diffFromPhi->SetAddress(diffFromPhi.data());
+    b_rechit_Noise->SetAddress(rechit_Noise.data());
+    b_hcalRechitPhi->SetAddress(hcalRechitPhi.data());
+    b_hcal_diffFromPhi->SetAddress(hcal_diffFromPhi.data());
+    b_hcalRechitRawID->SetAddress(hcalRechitRawID.data());
+    b_hcalRechitDepth->SetAddress(hcalRechitDepth.data());
+    b_hcalRechitNoise->SetAddress(hcalRechitNoise.data());
   }
 }
 
 
 // ------------ method called once each job just before starting event loop  ------------
 void
-FlatPhoHoEAnalyzer::beginJob()
+Rechits_New::beginJob()
 {
-/*  file = new TFile(output.c_str(), "recreate");
-  tree = new TTree("tree", "");
+/*  file = new TFile(output.c_str(), "recreate");*/
+  /*tree = new TTree("tree", "");
   tree->SetAutoSave(0);
   tree->SetImplicitMT(false);*/
   reallocate_setaddress();
@@ -993,7 +1204,7 @@ FlatPhoHoEAnalyzer::beginJob()
 
 // ------------ method called once each job just after ending the event loop  ------------
 void
-FlatPhoHoEAnalyzer::endJob()
+Rechits_New::endJob()
 {
  // file->cd();
  // tree->Write();
@@ -1001,7 +1212,7 @@ FlatPhoHoEAnalyzer::endJob()
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
 void
-FlatPhoHoEAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+Rechits_New::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   // The following says we do not know what parameters are allowed so do no validation
   // Please change this to state exactly what you do use, even if it is no parameters
   edm::ParameterSetDescription desc;
@@ -1010,4 +1221,4 @@ FlatPhoHoEAnalyzer::fillDescriptions(edm::ConfigurationDescriptions& description
 }
 
 //define this as a plug-in
-DEFINE_FWK_MODULE(FlatPhoHoEAnalyzer);
+DEFINE_FWK_MODULE(Rechits_New);
