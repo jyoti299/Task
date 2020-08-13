@@ -19,7 +19,6 @@ float dR=999.9;
   if (deltaphi > pi) deltaphi = 2. * pi - deltaphi;
 
   float deltaeta = fabs(ecalEta - hcalEta);
-  //  std::cout << "dphi, deta " << deltaphi << ", " << deltaeta << std::endl;
   dR = sqrt(deltaphi*deltaphi + deltaeta*deltaeta);
 
   return dR;
@@ -50,7 +49,7 @@ void HoE_Cone::Loop()
 //    fChain->GetEntry(jentry);       //read all branches
 //by  b_branchname->GetEntry(ientry); //read only this branch
 
-    outputFile = new TFile("testOut_gen.root","RECREATE");
+    outputFile = new TFile("test_check.root","RECREATE");
 
    //////////////////////////////
    //  /// cone size deltaR=0.15 ////
@@ -79,7 +78,7 @@ void HoE_Cone::Loop()
    TH1D* h1_myHoE_conedR0p15_Depth4_noise = new TH1D("h1_myHoE_conedR0p15_d4_noise", "myHoE_conedR0p15_d4_noise", 200, 0, 20);
    TH2* h2 = new TH2D("h2", "Supercluster Eta and DeltaR", 100, -2.5, 2.5, 50, 0, 5.0);
    TH2* h3 = new TH2D("h3", "Supercluster Eta and DPhi", 100, -2.5, 2.5, 50, 0, 5.0);
-   TH1D* h4 = new TH1D("h4"," DPhi ",5, 0, 5);
+   TH1D* h4 = new TH1D("h4"," DPhi ",30, 0, 5);
    //TH2* h2 = new TH2D("h2", "Supercluster Eta and DeltaR",100,0,10, 50, -2.5, 2.5);
    if (fChain == 0) return;
 
@@ -90,7 +89,7 @@ void HoE_Cone::Loop()
       Long64_t ientry = LoadTree(jentry);
       if (ientry < 0) break;
       nb = fChain->GetEntry(jentry);   nbytes += nb;
-
+     cout<<" nentries "<<nentries<<endl;
 
       for(int iele=0; iele < pho_genmatch->size(); iele++) {
       //cout<<" photo pt size "<<pho_pt->size()<< " genmatch size "<<pho_genmatch->size()<<endl;
@@ -118,20 +117,20 @@ void HoE_Cone::Loop()
           float hcalE_0p15_d5_noise=0;
           float hcalE_0p15_d6_noise=0;
           float hcalE_0p15_d7_noise=0;
-    h4->Fill((*pho_genmatch)[iele]);
-
+          float dPhi =0;
        for (int ihrh=0; ihrh<nhrh2; ihrh++) {
-        this_DeltaR = DeltaR((*pho_sc_eta)[iele], (*pho_sc_phi)[iele], (*hcalRechitEta)[iele][ihrh], (*hcalRechitPhi)[iele][ihrh]);
-        this_DeltaR_noise = DeltaR((*pho_sc_eta)[iele], (*pho_sc_phi)[iele], (*hcalRechitEta_noise)[iele][ihrh], (*hcalRechitPhi_noise)[iele][ihrh]); 
+        this_DeltaR = DeltaR((*pho_sc_eta)[iele], (*pho_sc_phi)[iele], (*hcalAllRechitEta)[iele][ihrh], (*hcalAllRechitPhi)[iele][ihrh]);
+        this_DeltaR_noise = DeltaR((*hcalRechitEta_noise)[iele][ihrh], (*hcalRechitPhi_noise)[iele][ihrh],(*hcalAllRechitEta)[iele][ihrh], (*hcalAllRechitPhi)[iele][ihrh]); 
            h3->Fill((*pho_sc_eta)[iele],(*hcal_diffFromPhi)[iele][ihrh]);
-          // h4->Fill((*hcal_diffFromPhi)[iele][ihrh]); 
-   //      cout<<" Delta R "<<this_DeltaR<<" For noise "<<this_DeltaR_noise<<endl;
-         int hcal_depth=(*hcalRechitDepth)[iele][ihrh];
-      if ((*pho_gen_ecal)[iele] > 20) {
+          // h4->Fill((*hcal_diffFromPhi)[iele][ihrh]);
+            dPhi = fabs((*pho_sc_phi)[iele] - (*hcalRechitPhi_noise)[iele][ihrh]);
+            h4->Fill(dPhi);
+         
+        int hcal_depth=(*hcalRechitDepth)[iele][ihrh];
+        if ((*pho_gen_ecal)[iele] > 20) {
           if (this_DeltaR <= 0.15) {
           hcalE_0p15 = hcalE_0p15+(*hcalRechitEnergy)[iele][ihrh];
-
-         if (hcal_depth==1) {
+            if (hcal_depth==1) {
 	      hcalE_0p15_d1=hcalE_0p15_d1+(*hcalRechitEnergy)[iele][ihrh];
 	      } 	 else if (hcal_depth==2) {
               hcalE_0p15_d2=hcalE_0p15_d2+(*hcalRechitEnergy)[iele][ihrh];
@@ -147,11 +146,9 @@ void HoE_Cone::Loop()
               hcalE_0p15_d7=hcalE_0p15_d7+(*hcalRechitEnergy)[iele][ihrh];
               }
       } //deltaR cone of 0.15
-
-         if (this_DeltaR_noise <= 0.15) {
-            h2->Fill((*pho_sc_eta)[iele],this_DeltaR_noise);
+        if (this_DeltaR_noise < 0.15) {
+           // h2->Fill((*pho_sc_eta)[iele],this_DeltaR_noise);
             hcalE_0p15_noise = hcalE_0p15_noise+(*hcalRechitNoise)[iele][ihrh];
-    cout<<" ihrh "<<ihrh<<" nhrh "<<nhrh2<<" depth "<<hcal_depth<<" Noise "<<(*hcalRechitNoise)[iele][ihrh]<<endl;
          if (hcal_depth==1) {
               hcalE_0p15_d1_noise=hcalE_0p15_d1_noise+(*hcalRechitNoise)[iele][ihrh];
               }          else if (hcal_depth==2) {
@@ -167,11 +164,11 @@ void HoE_Cone::Loop()
               }          else if (hcal_depth==7) {
               hcalE_0p15_d7_noise=hcalE_0p15_d7_noise+(*hcalRechitNoise)[iele][ihrh];
               }
-      } //deltaR cone of 0.15 for noise       
+          } //deltaR cone of 0.15 for noise       
 
        }// 20 GeV cut
      } //nhrh2 loop
-   
+       cout<<" ends here "<<endl; 
           float HoE_0p15 = hcalE_0p15/((*pho_sc_raw_energy)[iele]);
 	  float HoE_0p15_d1 = hcalE_0p15_d1/((*pho_sc_raw_energy)[iele]);
           float HoE_0p15_d2 = hcalE_0p15_d2/((*pho_sc_raw_energy)[iele]);
@@ -180,7 +177,7 @@ void HoE_Cone::Loop()
           float HoE_0p15_d5 = hcalE_0p15_d5/((*pho_sc_raw_energy)[iele]);
           float HoE_0p15_d6 = hcalE_0p15_d6/((*pho_sc_raw_energy)[iele]);
           float HoE_0p15_d7 = hcalE_0p15_d7/((*pho_sc_raw_energy)[iele]);
-cout<<" jentry "<<jentry <<" All "<<hcalE_0p15_noise<<" Depth1 "<<hcalE_0p15_d1_noise<<" Depth2 "<<hcalE_0p15_d2_noise<<" Depth 3 "<<hcalE_0p15_d3_noise<<" Depth 4 "<<hcalE_0p15_d4_noise<<endl;
+//cout<<" jentry "<<jentry <<" All "<<hcalE_0p15_noise<<" Depth1 "<<hcalE_0p15_d1_noise<<" Depth2 "<<hcalE_0p15_d2_noise<<" Depth 3 "<<hcalE_0p15_d3_noise<<" Depth 4 "<<hcalE_0p15_d4_noise<<endl;
           h1_myHoE_conedR0p15->Fill(hcalE_0p15);
           h1_myHoE_conedR0p15_Depth1->Fill(hcalE_0p15_d1);
           h1_myHoE_conedR0p15_Depth2->Fill(hcalE_0p15_d2);
@@ -208,8 +205,7 @@ cout<<" jentry "<<jentry <<" All "<<hcalE_0p15_noise<<" Depth1 "<<hcalE_0p15_d1_
           prof_H_tot_m_max_2x2_vs_genPt_Depth4->Fill(ECal_energy,hcalE_0p15_d4);
 
    }  //iele loop
-      // if (Cut(ientry) < 0) continue;
-   }
+  }
 
      prof_H_tot_m_max_2x2_vs_genPt_Noise_Depth1->Write();
 }

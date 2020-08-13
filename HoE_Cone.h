@@ -117,6 +117,8 @@ public :
    vector<vector<float> > *hcalRechitPhi;
    vector<vector<float> > *hcalRechitEta_noise;
    vector<vector<float> > *hcalRechitPhi_noise;
+   vector<vector<float> > *hcalAllRechitEta;
+   vector<vector<float> > *hcalAllRechitPhi;
    vector<vector<float> > *hcal_diffFromPhi;
 
    // List of branches
@@ -210,6 +212,8 @@ public :
    TBranch        *b_hcalRechitPhi;   //!
    TBranch        *b_hcalRechitEta_noise;   //!
    TBranch        *b_hcalRechitPhi_noise;   //!
+   TBranch        *b_hcalAllRechitEta;   //!
+   TBranch        *b_hcalAllRechitPhi;   //!
    TBranch        *b_hcal_diffFromPhi;   //!
 
    HoE_Cone(TTree *tree=0);
@@ -231,14 +235,17 @@ HoE_Cone::HoE_Cone(TTree *tree) : fChain(0)
 // if parameter tree is not specified (or zero), connect the file
 // used to generate this class and read the Tree.
    if (tree == 0) {
-      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("output_file_AllRechit_Cone.root");
+      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("output_file_AllRechit.root");
       if (!f || !f->IsOpen()) {
-         f = new TFile("output_file_AllRechit_Cone.root");
+         f = new TFile("output_file_AllRechit.root");
       }
-      TDirectory * dir = (TDirectory*)f->Get("output_file_AllRechit_Cone.root:/demo");
+      TDirectory * dir = (TDirectory*)f->Get("output_file_AllRechit.root:/demo");
       dir->GetObject("EventTree",tree);
-
-   }
+     /* TChain * chain = new TChain("demo/EventTree","");
+      chain->Add("root://cmseos.fnal.gov//store/group/lpcqstar/Jyoti/EGamma_Studies/Output/Miniaod_ntuples/Ntuples_BlackHole_6TeV/200716_051718/0000/output_file_AllRechit_Cone_1.root");
+     chain->Add("root://cmseos.fnal.gov//store/group/lpcqstar/Jyoti/EGamma_Studies/Output/Miniaod_ntuples/Ntuples_BlackHole_6TeV/200716_051718/0000/output_file_AllRechit_Cone_2.root");
+      tree = chain;*/
+    }
    Init(tree);
 }
 
@@ -360,6 +367,8 @@ void HoE_Cone::Init(TTree *tree)
    hcalRechitPhi = 0;
    hcalRechitEta_noise = 0;
    hcalRechitPhi_noise = 0;
+   hcalAllRechitEta = 0;
+   hcalAllRechitPhi = 0;
    hcal_diffFromPhi = 0;
    // Set branch addresses and branch pointers
    if (!tree) return;
@@ -457,6 +466,8 @@ void HoE_Cone::Init(TTree *tree)
    fChain->SetBranchAddress("hcalRechitPhi", &hcalRechitPhi, &b_hcalRechitPhi);
    fChain->SetBranchAddress("hcalRechitEta_noise", &hcalRechitEta_noise, &b_hcalRechitEta_noise);
    fChain->SetBranchAddress("hcalRechitPhi_noise", &hcalRechitPhi_noise, &b_hcalRechitPhi_noise);
+   fChain->SetBranchAddress("hcalAllRechitEta", &hcalAllRechitEta, &b_hcalAllRechitEta);
+   fChain->SetBranchAddress("hcalAllRechitPhi", &hcalAllRechitPhi, &b_hcalAllRechitPhi);
    fChain->SetBranchAddress("hcal_diffFromPhi", &hcal_diffFromPhi, &b_hcal_diffFromPhi);
    Notify();
 }
